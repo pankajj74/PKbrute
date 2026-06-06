@@ -16,7 +16,7 @@ This tool is for **authorized security testing only**. Only use on systems you o
 
 ### From GitHub:
 ```bash
-git clone https://github.com/YOUR_USERNAME/PKbrute.git
+git clone https://github.com/pankajj74/PKbrute.git
 cd PKbrute
 sudo chmod +x setup.sh
 sudo ./setup.sh
