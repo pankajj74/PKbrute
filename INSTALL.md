@@ -6,7 +6,7 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/PKbrute.git
+git clone https://github.com/pankajj74/PKbrute.git
 cd PKbrute
 
 # 2. Make installer executable
