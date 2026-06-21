@@ -5,14 +5,13 @@
 ### On Kali Linux Terminal:
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/pankajj74/PKbrute.git
 cd PKbrute
 
-# 2. Make installer executable
+
 chmod +x setup.sh
 
-# 3. Run installer (as root)
+
 sudo ./setup.sh
 
 # 4. Run the tool
