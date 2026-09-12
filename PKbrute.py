@@ -219,4 +219,4 @@ class PKbruteInstagram:
         print(f"{'='*50}{Style.RESET_ALL}")
         
         confirm = input(f"{Fore.RED}[!] Start attack? (yes/no): {Style.RESET_ALL}")
-        if confirm.lower()
+        if confirm.lower():
